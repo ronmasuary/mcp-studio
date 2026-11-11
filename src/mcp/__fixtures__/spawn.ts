@@ -1,0 +1,55 @@
+// How tests start the fixture server. Phase 2's real connect() reuses the same shape.
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+/**
+ * Resolved from import.meta.url against the SOURCE tree. Never from dist/: tsconfig.build.json
+ * excludes __fixtures__ from emit, so a compiled path does not exist.
+ */
+export const fixtureUrl = new URL("./echo-server.ts", import.meta.url);
+const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
+
+/**
+ * `node --import tsx <fixture>`. Vitest transpiles test files in-process but not a path handed to
+ * child_process.spawn, and Node 20 cannot run .ts natively. cwd is the repo root so that the bare
+ * `tsx` specifier resolves from this repo's node_modules wherever the test runner was started.
+ * Node's loader ExperimentalWarning goes to stderr, which is not the protocol stream.
+ */
+export function fixtureServerParams(): StdioServerParameters {
+  return {
+    command: process.execPath,
+    args: ["--import", "tsx", fileURLToPath(fixtureUrl)],
+    cwd: repoRoot,
+    // stdio env REPLACES the environment, so extend the defaults rather than passing a bare object.
+    env: { ...getDefaultEnvironment() },
+    stderr: "ignore",
+  };
+}
+
+/** True while a process with this pid exists. */
+export function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Last-resort cleanup. On win32, kill('SIGTERM') is a hard terminate that does not reach
+ * grandchildren, so use `taskkill /T /F` to take the whole tree. Safe to call on a dead pid.
+ */
+export function reap(pid: number | null | undefined): void {
+  if (!pid || !isAlive(pid)) return;
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // already gone
+    }
+  }
+}
