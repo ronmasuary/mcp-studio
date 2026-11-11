@@ -281,6 +281,16 @@ const tools: FixtureTool[] = [
       handler: async (a) => text(`${name} ${String(a.n ?? "")}`.trim()),
     };
   }),
+  {
+    // Phase 5 gates this behind a confirm dialog
+    def: {
+      name: "delete_everything",
+      description: "Pretends to delete everything. Does nothing real.",
+      inputSchema: { type: "object", properties: { confirm: { type: "boolean" } } },
+      annotations: { destructiveHint: true, readOnlyHint: false },
+    },
+    handler: async () => text("nothing was deleted, this is a fixture"),
+  },
 ];
 
 /** Full tool definitions in list order. Tests and Phase 3 read this instead of re-typing names. */
