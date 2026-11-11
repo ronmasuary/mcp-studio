@@ -269,6 +269,18 @@ const tools: FixtureTool[] = [
     },
     handler: async (a) => text(JSON.stringify(a)),
   },
+  // Padding so tools/list spans multiple pages.
+  ...Array.from({ length: FILLER_TOOL_COUNT }, (_v, i): FixtureTool => {
+    const name = `filler_${String(i + 1).padStart(2, "0")}`;
+    return {
+      def: {
+        name,
+        description: `Padding tool ${i + 1} of ${FILLER_TOOL_COUNT}, present to force pagination.`,
+        inputSchema: { type: "object", properties: { n: { type: "integer" } } },
+      },
+      handler: async (a) => text(`${name} ${String(a.n ?? "")}`.trim()),
+    };
+  }),
 ];
 
 /** Full tool definitions in list order. Tests and Phase 3 read this instead of re-typing names. */
