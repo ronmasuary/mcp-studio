@@ -9,7 +9,8 @@ them only on Windows, which is half of the CI matrix.
 
 1. **`env` replaces the environment.** `StdioServerParameters.env`, when given, is the child's whole
    environment. A user who adds one variable, `{ API_KEY: "..." }`, silently strips `PATH`,
-   `SystemRoot`, `APPDATA` and `COMSPEC`, and every `npx`-launched server stops starting on Windows.
+   `SystemRoot`, `APPDATA` and the rest of the SDK's inherited allow-list, and every `npx`-launched
+   server stops starting on Windows.
 2. **Killing the parent does not kill the tree.** `npx some-server` is `npx`, then `node`, then the
    server. On win32, `child.kill("SIGTERM")` is an unconditional terminate of that one pid and does
    not reach descendants, so closing a connection leaves the real server running as an orphan.
@@ -29,6 +30,11 @@ The child's environment is always `{ ...getDefaultEnvironment(), ...resolved }`,
 `{ fromEnv: "NAME" }` references against the host environment (`resolveValues`). A reference to an
 unset variable fails `connect` with `config_invalid`; the message names the variable and never a
 value. A literal that the user typed is passed straight through for that session (ADR-0007).
+
+On win32 that allow-list is `APPDATA`, `HOMEDRIVE`, `HOMEPATH`, `LOCALAPPDATA`, `PATH`,
+`PROCESSOR_ARCHITECTURE`, `SYSTEMDRIVE`, `SYSTEMROOT`, `TEMP`, `USERNAME`, `USERPROFILE` and
+`PROGRAMFILES`. It does not include `COMSPEC`: cross-spawn reads that from the parent process's own
+environment rather than the child's, so `.cmd` shims such as `npx` still resolve without it.
 
 The host's full environment is deliberately not inherited. Passing everything would hand the child
 every credential in the user's shell, which is the opposite of what a tool that runs arbitrary

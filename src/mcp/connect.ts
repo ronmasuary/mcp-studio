@@ -118,8 +118,9 @@ function buildStdio(cfg: StdioServerConfig, opts: ConnectOptions): TrackedStdioT
     command: cfg.command,
     ...(cfg.args ? { args: cfg.args } : {}),
     ...(cfg.cwd ? { cwd: cfg.cwd } : {}),
-    // A bare `env` REPLACES the environment and the child loses PATH, SystemRoot, APPDATA and
-    // COMSPEC, which breaks every npx server on Windows. Always extend the defaults.
+    // A bare `env` REPLACES the environment and the child loses PATH, SystemRoot, APPDATA and the
+    // rest of the SDK's inherited allow-list, which breaks every npx server on Windows. Always
+    // extend the defaults.
     env,
     stderr: "pipe",
     ...(opts.maxResponseBytes ? { maxBufferSize: opts.maxResponseBytes } : {}),
