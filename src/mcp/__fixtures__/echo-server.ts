@@ -36,6 +36,21 @@ interface FixtureTool {
 
 const text = (t: string): CallToolResult => ({ content: [{ type: "text", text: t }] });
 
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new Error("cancelled"));
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("cancelled"));
+      },
+      { once: true },
+    );
+  });
+}
+
 const tools: FixtureTool[] = [
   {
     // flat string, required + optional boolean
@@ -52,6 +67,169 @@ const tools: FixtureTool[] = [
       },
     },
     handler: async (a) => text(a.uppercase === true ? String(a.message).toUpperCase() : String(a.message)),
+  },
+  {
+    // numbers with min/max, integer vs number
+    def: {
+      name: "add",
+      description: "Adds two numbers. Both are bounded, and the count must be an integer.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          a: { type: "number", minimum: -100, maximum: 100, description: "First addend" },
+          b: { type: "number", minimum: -100, maximum: 100, description: "Second addend" },
+          times: { type: "integer", minimum: 1, maximum: 5, default: 1, description: "Repeat count" },
+        },
+        required: ["a", "b"],
+      },
+      outputSchema: {
+        type: "object",
+        properties: { sum: { type: "number" } },
+        required: ["sum"],
+      },
+    },
+    handler: async (a) => {
+      const sum = (Number(a.a) + Number(a.b)) * Number(a.times ?? 1);
+      return { content: [{ type: "text", text: String(sum) }], structuredContent: { sum } };
+    },
+  },
+  {
+    // enum, required
+    def: {
+      name: "paint",
+      description: "Picks a colour from a fixed set.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          colour: { type: "string", enum: ["red", "green", "blue"], description: "Colour name" },
+          finish: { type: "string", enum: ["matte", "gloss"], default: "matte" },
+        },
+        required: ["colour"],
+      },
+    },
+    handler: async (a) => text(`${String(a.finish ?? "matte")} ${String(a.colour)}`),
+  },
+  {
+    // optional vs required across several flat types
+    def: {
+      name: "greet",
+      description: "Greets a person. Only the name is required.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, description: "Who to greet" },
+          title: { type: "string", description: "Optional honorific" },
+          excited: { type: "boolean" },
+        },
+        required: ["name"],
+      },
+    },
+    handler: async (a) =>
+      text(`Hello, ${a.title ? `${String(a.title)} ` : ""}${String(a.name)}${a.excited === true ? "!" : "."}`),
+  },
+  {
+    // nested objects
+    def: {
+      name: "create_user",
+      description: "Creates a user record from a nested object.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          user: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              address: {
+                type: "object",
+                properties: {
+                  street: { type: "string" },
+                  city: { type: "string" },
+                  zip: { type: "string", pattern: "^[0-9]{5}$" },
+                },
+                required: ["city"],
+              },
+            },
+            required: ["name"],
+          },
+        },
+        required: ["user"],
+      },
+    },
+    handler: async (a) => ({
+      content: [{ type: "text", text: JSON.stringify(a.user) }],
+      structuredContent: { created: a.user },
+    }),
+  },
+  {
+    // arrays of objects
+    def: {
+      name: "tag_items",
+      description: "Tags a list of items. Each item is an object.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              properties: { id: { type: "integer" }, label: { type: "string" } },
+              required: ["id"],
+            },
+          },
+          labels: { type: "array", items: { type: "string" }, description: "Array of strings" },
+        },
+        required: ["items"],
+      },
+    },
+    handler: async (a) => text(`tagged ${(a.items as unknown[]).length} items`),
+  },
+  {
+    // isError: true is a SUCCESSFUL JSON-RPC response, not a throw
+    def: {
+      name: "always_fails",
+      description: "Always returns a tool-level error (isError: true).",
+      inputSchema: { type: "object", properties: { reason: { type: "string" } } },
+    },
+    handler: async (a) => ({
+      isError: true,
+      content: [{ type: "text", text: `failed on purpose: ${String(a.reason ?? "no reason given")}` }],
+    }),
+  },
+  {
+    // ~1s sleep, honours cancellation
+    def: {
+      name: "slow",
+      description: `Sleeps about ${SLOW_TOOL_MS}ms, then answers. Cancellable.`,
+      inputSchema: { type: "object", properties: {} },
+    },
+    handler: async (_a, signal) => {
+      await sleep(SLOW_TOOL_MS, signal);
+      return text("done sleeping");
+    },
+  },
+  {
+    // large text blob
+    def: {
+      name: "big_text",
+      description: `Returns ${BIG_TEXT_LENGTH} characters of text, to exercise response truncation.`,
+      inputSchema: { type: "object", properties: {} },
+    },
+    handler: async () => text("x".repeat(BIG_TEXT_LENGTH)),
+  },
+  {
+    // base64 image content
+    def: {
+      name: "tiny_image",
+      description: "Returns a 1x1 PNG as base64 image content.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    handler: async () => ({
+      content: [
+        { type: "text", text: "here is an image" },
+        { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+      ],
+    }),
   },
 ];
 
