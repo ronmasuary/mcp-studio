@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { StdioServerConfig } from "../server-config.js";
 
 /**
  * Resolved from import.meta.url against the SOURCE tree. Never from dist/: tsconfig.build.json
@@ -52,4 +53,20 @@ export function reap(pid: number | null | undefined): void {
       // already gone
     }
   }
+}
+
+/** The same child as fixtureServerParams(), expressed as a ServerConfig for connect(). */
+export function fixtureServerConfig(): StdioServerConfig {
+  const p = fixtureServerParams();
+  return { transport: "stdio", command: p.command, args: p.args ?? [], ...(p.cwd ? { cwd: p.cwd } : {}) };
+}
+
+/** Polls until `predicate` is true or `timeoutMs` passes. For asserting on asynchronous process state. */
+export async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return predicate();
 }

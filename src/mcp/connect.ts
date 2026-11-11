@@ -13,6 +13,7 @@ import {
   isSpawnFailure,
   isStudioError,
 } from "./errors.js";
+import { defaultRegistry, type SessionRegistry } from "./registry.js";
 import type { Session } from "./session.js";
 import {
   ServerConfigSchema,
@@ -30,6 +31,8 @@ const STDERR_TAIL_CHARS = 4096;
 const SSE_PROBE_TIMEOUT_MS = 3000;
 
 export interface ConnectOptions {
+  /** Registry the session is recorded in. Defaults to the process-wide registry. */
+  registry?: SessionRegistry;
   /** Where `{ fromEnv }` references are resolved. Defaults to process.env. */
   env?: NodeJS.ProcessEnv;
   /** Initialize deadline in ms. */
@@ -174,10 +177,11 @@ async function classifyConnectError(
 }
 
 /**
- * Connects to a server and returns the live Session. Throws a StudioError whose `kind` says what
- * went wrong: config_invalid, spawn_failed, initialize_failed or sse_only_unsupported.
+ * Opens a session without recording it anywhere. Most callers want connect(). Throws a
+ * StudioError whose `kind` says what went wrong: config_invalid, spawn_failed,
+ * initialize_failed or sse_only_unsupported.
  */
-export async function connect(serverId: string, config: ServerConfig, opts: ConnectOptions = {}): Promise<Session> {
+export async function openSession(serverId: string, config: ServerConfig, opts: ConnectOptions = {}): Promise<Session> {
   const parsed = ServerConfigSchema.safeParse(config);
   if (!parsed.success) throw new StudioError("config_invalid", `invalid server config for "${serverId}"`);
   const cfg = parsed.data;
@@ -224,4 +228,22 @@ export async function connect(serverId: string, config: ServerConfig, opts: Conn
   // pid is read once, here, because transport.pid goes null as soon as the child exits.
   session.pid = stdioTransport?.spawnedPid ?? null;
   return session;
+}
+
+/**
+ * Connects to a server and registers the session under the CALLER's serverId. The registry entry
+ * moves connecting then connected, or connecting then failed with `lastError` set. Rethrows the
+ * StudioError from openSession on failure.
+ */
+export async function connect(serverId: string, config: ServerConfig, opts: ConnectOptions = {}): Promise<Session> {
+  const registry = opts.registry ?? defaultRegistry;
+  registry.begin(serverId, config);
+  try {
+    const session = await openSession(serverId, config, opts);
+    registry.attach(serverId, session);
+    return session;
+  } catch (err) {
+    registry.fail(serverId, err);
+    throw err;
+  }
 }
