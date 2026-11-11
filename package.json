@@ -1,0 +1,33 @@
+{
+  "name": "mcp-studio",
+  "version": "0.0.0",
+  "description": "Postman for MCP: connect to any MCP server, fill a form from each tool's JSON Schema, fire the call, and save calls into Collections with checks.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ron Masuary <ronmas2@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ronmasuary/mcp-studio.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "mcp-studio": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "web/dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:web": "npm --prefix web run build",
+    "build:all": "npm run build && npm run build:web",
+    "prepack": "npm run build:all",
+    "setup": "npm install && npm --prefix web install && npm run build:all",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && eslint --config web/eslint.config.js web",
+    "test": "vitest run",
+    "test:web": "npm --prefix web run test"
+  }
+}
