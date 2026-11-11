@@ -27,6 +27,8 @@ export const BIG_TEXT_LENGTH = 200_000;
 /** 1x1 transparent PNG. */
 export const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+/** 4-sample 8-bit mono 8kHz WAV, 48 bytes. */
+export const TINY_WAV_BASE64 = "UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAoIBg";
 
 type Handler = (args: Record<string, unknown>, signal: AbortSignal) => Promise<CallToolResult>;
 interface FixtureTool {
@@ -237,6 +239,29 @@ const tools: FixtureTool[] = [
       content: [
         { type: "text", text: "here is an image" },
         { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+      ],
+    }),
+  },
+  {
+    // audio, embedded resource and resource_link: the three content kinds the others do not cover
+    def: {
+      name: "all_content_kinds",
+      description: "Returns one audio, one embedded resource and one resource_link content entry.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    handler: async () => ({
+      content: [
+        { type: "audio", data: TINY_WAV_BASE64, mimeType: "audio/wav" },
+        {
+          type: "resource",
+          resource: { uri: "fixture://notes/readme", mimeType: "text/plain", text: "embedded resource text" },
+        },
+        {
+          type: "resource_link",
+          uri: "fixture://notes/linked",
+          name: "linked-notes",
+          mimeType: "text/markdown",
+        },
       ],
     }),
   },
