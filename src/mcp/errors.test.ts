@@ -1,5 +1,7 @@
 // One real trigger per ErrorKind, so each case is provably distinguishable from the others.
 import { afterAll, describe, expect, it } from "vitest";
+import os from "node:os";
+import path from "node:path";
 import { callTool } from "./call.js";
 import { cancelCall, newCallId } from "./cancel.js";
 import { connect } from "./connect.js";
@@ -34,7 +36,7 @@ describe("error taxonomy against real processes", () => {
   });
 
   it("spawn_failed: the working directory does not exist", async () => {
-    const cfg: ServerConfig = { transport: "stdio", command: process.execPath, args: idle, cwd: "Z:\definitely\missing\dir" };
+    const cfg: ServerConfig = { transport: "stdio", command: process.execPath, args: idle, cwd: path.join(os.tmpdir(), "mcp-studio-no-such-dir") };
     expect(await kindOf(connect("e1b", cfg, { registry }))).toBe("spawn_failed");
   });
 
