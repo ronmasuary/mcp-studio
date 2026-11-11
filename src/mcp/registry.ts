@@ -2,7 +2,7 @@
 // browser refresh. All four statuses are reachable, because the UI renders all four.
 import { StudioError, errorMessage, isStudioError, type ErrorKind } from "./errors.js";
 import type { ServerConfig } from "./server-config.js";
-import { dropError, type Session } from "./session.js";
+import { closeSession, dropError, type Session } from "./session.js";
 
 export type ServerStatus = "connected" | "connecting" | "failed" | "disconnected";
 
@@ -104,10 +104,7 @@ export class SessionRegistry {
     entry.status = "disconnected";
     delete entry.session;
     delete entry.lastError;
-    if (session) {
-      session.closing = true;
-      await session.client.close();
-    }
+    if (session) await closeSession(session);
   }
 
   /** Disconnects, then forgets the definition. */

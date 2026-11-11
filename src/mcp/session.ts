@@ -2,6 +2,7 @@
 // transports directly.
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StudioError } from "./errors.js";
+import { isAlive, killTree, untrackPid } from "./process-tree.js";
 
 export type TransportKind = "stdio" | "http";
 
@@ -53,4 +54,31 @@ server stderr:
 ${tail}` : ""}`,
     { cause },
   );
+}
+
+/** How long a child gets to exit after stdin closes before its whole tree is killed. */
+export const CLOSE_GRACE_MS = 1500;
+
+/**
+ * Closes a session and guarantees the child tree is gone. Politely first (the SDK ends stdin and
+ * the server should exit), then `taskkill /T /F` on win32 or SIGKILL down the tree elsewhere if
+ * the child is still there after `graceMs`. Idempotent.
+ */
+export async function closeSession(session: Session, graceMs: number = CLOSE_GRACE_MS): Promise<void> {
+  session.closing = true;
+  const closing = session.client.close().catch(() => undefined);
+  const pid = session.pid;
+  if (pid) {
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      closing,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, graceMs);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (isAlive(pid)) killTree(pid);
+  }
+  await closing;
+  untrackPid(pid);
 }

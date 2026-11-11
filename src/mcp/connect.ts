@@ -14,6 +14,7 @@ import {
   isStudioError,
 } from "./errors.js";
 import { defaultRegistry, type SessionRegistry } from "./registry.js";
+import { killTree, trackPid, untrackPid } from "./process-tree.js";
 import type { Session } from "./session.js";
 import {
   ServerConfigSchema,
@@ -73,6 +74,8 @@ class TrackedStdioTransport extends StdioClientTransport {
   override async start(): Promise<void> {
     await super.start();
     this.spawnedPid = this.pid;
+    // Recorded at spawn, so even a child that hangs during initialize is reaped on process exit.
+    if (this.spawnedPid) trackPid(this.spawnedPid);
   }
 }
 
@@ -216,13 +219,19 @@ export async function openSession(serverId: string, config: ServerConfig, opts: 
   };
   client.onclose = () => {
     session.closed = true;
+    untrackPid(stdioTransport?.spawnedPid);
     for (const listener of session.closeListeners) listener(session);
   };
 
   try {
     await client.connect(transport, { timeout: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS });
   } catch (err) {
-    await client.close().catch(() => undefined);
+    // A child that spawned but never completed initialize may ignore stdin closing. Give it a
+    // moment, then take the whole tree.
+    const spawned = stdioTransport?.spawnedPid;
+    await Promise.race([client.close().catch(() => undefined), new Promise((r) => setTimeout(r, 1500).unref())]);
+    killTree(spawned);
+    untrackPid(spawned);
     throw await classifyConnectError(err, cfg, opts, stderrChunks);
   }
   // pid is read once, here, because transport.pid goes null as soon as the child exits.
@@ -246,4 +255,9 @@ export async function connect(serverId: string, config: ServerConfig, opts: Conn
     registry.fail(serverId, err);
     throw err;
   }
+}
+
+/** Closes a registered session and kills its process tree. The definition stays; status becomes `disconnected`. */
+export async function disconnect(serverId: string, opts: { registry?: SessionRegistry } = {}): Promise<void> {
+  await (opts.registry ?? defaultRegistry).disconnect(serverId);
 }

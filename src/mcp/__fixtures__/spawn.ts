@@ -1,7 +1,7 @@
 // How tests start the fixture server. Phase 2's real connect() reuses the same shape.
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { isAlive, killTree } from "../process-tree.js";
 import type { StdioServerConfig } from "../server-config.js";
 
 /**
@@ -28,31 +28,11 @@ export function fixtureServerParams(): StdioServerParameters {
   };
 }
 
-/** True while a process with this pid exists. */
-export function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { isAlive };
 
-/**
- * Last-resort cleanup. On win32, kill('SIGTERM') is a hard terminate that does not reach
- * grandchildren, so use `taskkill /T /F` to take the whole tree. Safe to call on a dead pid.
- */
+/** Last-resort cleanup for tests: kills the whole tree rooted at pid. Safe on a dead pid. */
 export function reap(pid: number | null | undefined): void {
-  if (!pid || !isAlive(pid)) return;
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-  } else {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // already gone
-    }
-  }
+  killTree(pid);
 }
 
 /** The same child as fixtureServerParams(), expressed as a ServerConfig for connect(). */
