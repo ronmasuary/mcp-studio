@@ -1,7 +1,7 @@
 // callTool: one tools/call, with a measured duration and an explicit timeout.
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { CallRegistry, defaultCalls } from "./cancel.js";
-import { StudioError, isRequestTimeout } from "./errors.js";
+import { assertOpen, classifyRequestError } from "./classify.js";
 import type { Session } from "./session.js";
 
 /** The SDK default is 60s, which outlives the 20s test budget and any patient user. */
@@ -42,6 +42,7 @@ export async function callTool(
   opts: CallOptions,
 ): Promise<CallResult> {
   const timeout = opts.timeout ?? DEFAULT_CALL_TIMEOUT_MS;
+  assertOpen(session);
   const calls = opts.calls ?? defaultCalls;
   // Registered BEFORE the request is issued, so a cancel can arrive at any moment after this line.
   const controller = calls.register(opts.callId);
@@ -63,12 +64,7 @@ export async function callTool(
     if (res.structuredContent !== undefined) result.structuredContent = res.structuredContent as Record<string, unknown>;
     return result;
   } catch (err) {
-    const ms = Math.round(performance.now() - started);
-    // Order matters: the SDK reports ANY abort whose reason is not an McpError as RequestTimeout,
-    // so our own controller must be checked first or every cancel would read as a timeout.
-    if (controller.signal.aborted) throw new StudioError("cancelled", `${name} was cancelled after ${ms}ms`, { cause: err });
-    if (isRequestTimeout(err)) throw new StudioError("timeout", `${name} timed out after ${timeout}ms`, { cause: err });
-    throw err;
+    throw classifyRequestError(err, { session, aborted: controller.signal.aborted, what: `tools/call ${name}`, timeoutMs: timeout });
   } finally {
     opts.signal?.removeEventListener("abort", forward);
     calls.release(opts.callId);

@@ -29,7 +29,13 @@ export interface Session {
 }
 
 /** The SDK's ReadBuffer message when one stdio message exceeds maxBufferSize. */
-const BUFFER_CAP_RE = /exceeded maximum size of (d+) bytes/;
+const BUFFER_CAP_RE = /exceeded maximum size of (\d+) bytes/;
+
+/** Records a transport error. A buffer-cap error is sticky: later errors (EPIPE while closing) must not mask it. */
+export function recordTransportError(session: Session, err: Error): void {
+  if (session.lastTransportError && BUFFER_CAP_RE.test(session.lastTransportError.message)) return;
+  session.lastTransportError = err;
+}
 
 /**
  * Why a session closed when we did not ask it to: response_too_large when the stdio buffer cap
@@ -49,9 +55,7 @@ export function dropError(session: Session): StudioError {
   const why = cause ? `: ${cause.message}` : "";
   return new StudioError(
     "transport_dropped",
-    `connection to "${session.serverId}" was lost${why}${tail ? `
-server stderr:
-${tail}` : ""}`,
+    `connection to "${session.serverId}" was lost${why}${tail ? ` (server stderr: ${tail})` : ""}`,
     { cause },
   );
 }

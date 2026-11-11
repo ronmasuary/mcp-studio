@@ -1,5 +1,6 @@
 // tools/list across every page, normalised to the shape the rest of the product consumes.
 import type { Tool, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { assertOpen, classifyRequestError } from "./classify.js";
 import { StudioError } from "./errors.js";
 import type { Session } from "./session.js";
 
@@ -40,15 +41,21 @@ export function toToolDef(tool: Tool): ToolDef {
  * pagination_runaway rather than looping.
  */
 export async function listTools(session: Session, opts: ListToolsOptions = {}): Promise<ToolDef[]> {
+  assertOpen(session);
   const maxPages = opts.maxPages ?? MAX_LIST_PAGES;
+  const timeout = opts.timeout ?? DEFAULT_LIST_TIMEOUT_MS;
   const out: ToolDef[] = [];
   const seen = new Set<string>();
   let cursor: string | undefined;
   for (let page = 0; page < maxPages; page++) {
-    const res = await session.client.listTools(cursor === undefined ? undefined : { cursor }, {
-      timeout: opts.timeout ?? DEFAULT_LIST_TIMEOUT_MS,
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    });
+    const res = await session.client
+      .listTools(cursor === undefined ? undefined : { cursor }, {
+        timeout,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      })
+      .catch((err: unknown) => {
+        throw classifyRequestError(err, { session, aborted: opts.signal?.aborted === true, what: "tools/list", timeoutMs: timeout });
+      });
     out.push(...res.tools.map(toToolDef));
     if (!res.nextCursor) return out;
     if (seen.has(res.nextCursor)) {

@@ -23,6 +23,8 @@ export type ErrorKind =
   | "config_invalid"
   /** The session is not connected. */
   | "not_connected"
+  /** The server answered with a JSON-RPC error: unknown tool, invalid params, internal error. */
+  | "protocol_error"
   /** The serverId is already connected or connecting. */
   | "already_connected"
   /** A callId is already in flight. */

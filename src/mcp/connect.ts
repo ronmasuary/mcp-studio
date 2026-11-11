@@ -15,7 +15,7 @@ import {
 } from "./errors.js";
 import { defaultRegistry, type SessionRegistry } from "./registry.js";
 import { killTree, trackPid, untrackPid } from "./process-tree.js";
-import type { Session } from "./session.js";
+import { recordTransportError, type Session } from "./session.js";
 import {
   ServerConfigSchema,
   isEnvRef,
@@ -214,9 +214,7 @@ export async function openSession(serverId: string, config: ServerConfig, opts: 
     stderrTail: () => stderrChunks,
     closeListeners: new Set(),
   };
-  client.onerror = (err) => {
-    session.lastTransportError = err;
-  };
+  client.onerror = (err) => recordTransportError(session, err);
   client.onclose = () => {
     session.closed = true;
     untrackPid(stdioTransport?.spawnedPid);
