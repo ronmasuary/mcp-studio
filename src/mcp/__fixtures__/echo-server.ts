@@ -51,6 +51,15 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+// Deeply nested object, built programmatically so the depth is explicit.
+function nestedSchema(depth: number): Record<string, unknown> {
+  let inner: Record<string, unknown> = { type: "string", description: "Leaf value" };
+  for (let i = depth; i >= 1; i--) {
+    inner = { type: "object", properties: { [`level${i}`]: inner }, required: [`level${i}`] };
+  }
+  return inner;
+}
+
 const tools: FixtureTool[] = [
   {
     // flat string, required + optional boolean
@@ -230,6 +239,35 @@ const tools: FixtureTool[] = [
         { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
       ],
     }),
+  },
+  {
+    // Hostile schema: oneOf, deep nesting, prefixItems. Phase 3 pins down what the form
+    // refuses to render and falls back to raw JSON for.
+    def: {
+      name: "hostile_schema",
+      description: "Deliberately awkward schema: oneOf, 6 levels of nesting, prefixItems.",
+      inputSchema: {
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+        properties: {
+          choice: {
+            oneOf: [
+              { type: "string" },
+              { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+            ],
+          },
+          deep: nestedSchema(6),
+          pair: {
+            type: "array",
+            prefixItems: [{ type: "string" }, { type: "number" }],
+            items: false,
+            minItems: 2,
+          },
+        },
+        required: ["choice"],
+      },
+    },
+    handler: async (a) => text(JSON.stringify(a)),
   },
 ];
 
