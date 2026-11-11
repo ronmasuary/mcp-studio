@@ -1,7 +1,8 @@
 // How tests start the fixture server. Phase 2's real connect() reuses the same shape.
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { isAlive, killTree } from "../process-tree.js";
+import type { StdioServerConfig } from "../server-config.js";
 
 /**
  * Resolved from import.meta.url against the SOURCE tree. Never from dist/: tsconfig.build.json
@@ -27,29 +28,25 @@ export function fixtureServerParams(): StdioServerParameters {
   };
 }
 
-/** True while a process with this pid exists. */
-export function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+export { isAlive };
+
+/** Last-resort cleanup for tests: kills the whole tree rooted at pid. Safe on a dead pid. */
+export function reap(pid: number | null | undefined): void {
+  killTree(pid);
 }
 
-/**
- * Last-resort cleanup. On win32, kill('SIGTERM') is a hard terminate that does not reach
- * grandchildren, so use `taskkill /T /F` to take the whole tree. Safe to call on a dead pid.
- */
-export function reap(pid: number | null | undefined): void {
-  if (!pid || !isAlive(pid)) return;
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-  } else {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // already gone
-    }
+/** The same child as fixtureServerParams(), expressed as a ServerConfig for connect(). */
+export function fixtureServerConfig(): StdioServerConfig {
+  const p = fixtureServerParams();
+  return { transport: "stdio", command: p.command, args: p.args ?? [], ...(p.cwd ? { cwd: p.cwd } : {}) };
+}
+
+/** Polls until `predicate` is true or `timeoutMs` passes. For asserting on asynchronous process state. */
+export async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 25));
   }
+  return predicate();
 }

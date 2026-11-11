@@ -1,0 +1,88 @@
+// A live connection to one MCP server. Plain data around the SDK Client, so callers never touch
+// transports directly.
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StudioError } from "./errors.js";
+import { isAlive, killTree, untrackPid } from "./process-tree.js";
+
+export type TransportKind = "stdio" | "http";
+
+export interface Session {
+  readonly serverId: string;
+  readonly kind: TransportKind;
+  readonly client: Client;
+  /**
+   * Child process pid for stdio sessions, captured when the process spawned. The SDK's own
+   * `transport.pid` returns null once the process has exited, which is exactly when cleanup
+   * wants it, so it is recorded here.
+   */
+  pid: number | null;
+  /** True once the transport has closed, for any reason. */
+  closed: boolean;
+  /** True when WE initiated the close (disconnect), as opposed to the transport dropping. */
+  closing: boolean;
+  /** The last error the transport reported, for example the stdio buffer cap tripping. */
+  lastTransportError: Error | undefined;
+  /** Tail of the child's stderr (stdio only), kept to explain failures. */
+  stderrTail: () => string;
+  /** Called once when the transport closes. */
+  readonly closeListeners: Set<(session: Session) => void>;
+}
+
+/** The SDK's ReadBuffer message when one stdio message exceeds maxBufferSize. */
+const BUFFER_CAP_RE = /exceeded maximum size of (\d+) bytes/;
+
+/** Records a transport error. A buffer-cap error is sticky: later errors (EPIPE while closing) must not mask it. */
+export function recordTransportError(session: Session, err: Error): void {
+  if (session.lastTransportError && BUFFER_CAP_RE.test(session.lastTransportError.message)) return;
+  session.lastTransportError = err;
+}
+
+/**
+ * Why a session closed when we did not ask it to: response_too_large when the stdio buffer cap
+ * tripped, transport_dropped otherwise (child exited, socket closed).
+ */
+export function dropError(session: Session): StudioError {
+  const cause = session.lastTransportError;
+  const cap = cause ? BUFFER_CAP_RE.exec(cause.message) : null;
+  if (cap) {
+    return new StudioError(
+      "response_too_large",
+      `a response exceeded the ${cap[1]} byte cap and the connection was closed`,
+      { cause },
+    );
+  }
+  const tail = session.stderrTail().trim();
+  const why = cause ? `: ${cause.message}` : "";
+  return new StudioError(
+    "transport_dropped",
+    `connection to "${session.serverId}" was lost${why}${tail ? ` (server stderr: ${tail})` : ""}`,
+    { cause },
+  );
+}
+
+/** How long a child gets to exit after stdin closes before its whole tree is killed. */
+export const CLOSE_GRACE_MS = 1500;
+
+/**
+ * Closes a session and guarantees the child tree is gone. Politely first (the SDK ends stdin and
+ * the server should exit), then `taskkill /T /F` on win32 or SIGKILL down the tree elsewhere if
+ * the child is still there after `graceMs`. Idempotent.
+ */
+export async function closeSession(session: Session, graceMs: number = CLOSE_GRACE_MS): Promise<void> {
+  session.closing = true;
+  const closing = session.client.close().catch(() => undefined);
+  const pid = session.pid;
+  if (pid) {
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      closing,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, graceMs);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (isAlive(pid)) killTree(pid);
+  }
+  await closing;
+  untrackPid(pid);
+}

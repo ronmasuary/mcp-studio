@@ -9,6 +9,7 @@ import {
   FIXTURE_TOOL_NAMES,
   SLOW_TOOL_MS,
   TINY_PNG_BASE64,
+  TINY_WAV_BASE64,
 } from "./echo-server.js";
 import { fixtureServerParams, isAlive, reap } from "./spawn.js";
 
@@ -69,7 +70,7 @@ describe("echo fixture server", () => {
     expect(allTools.map((t) => t.name)).toEqual([...FIXTURE_TOOL_NAMES]);
     for (const name of [
       "echo", "add", "paint", "greet", "create_user", "tag_items", "always_fails", "slow",
-      "big_text", "tiny_image", "hostile_schema", "delete_everything",
+      "big_text", "tiny_image", "all_content_kinds", "hostile_schema", "delete_everything",
     ]) {
       expect(FIXTURE_TOOL_NAMES).toContain(name);
     }
@@ -134,6 +135,18 @@ describe("echo fixture server", () => {
   it("returns a base64 image", async () => {
     const res = await client.callTool({ name: "tiny_image", arguments: {} });
     expect(res.content).toContainEqual({ type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" });
+  });
+
+  it("returns audio, an embedded resource and a resource link", async () => {
+    const res = await client.callTool({ name: "all_content_kinds", arguments: {} });
+    const content = res.content as { type: string }[];
+    expect(content.map((c) => c.type)).toEqual(["audio", "resource", "resource_link"]);
+    expect(content[0]).toEqual({ type: "audio", data: TINY_WAV_BASE64, mimeType: "audio/wav" });
+    expect(content[1]).toEqual({
+      type: "resource",
+      resource: { uri: "fixture://notes/readme", mimeType: "text/plain", text: "embedded resource text" },
+    });
+    expect(content[2]).toMatchObject({ type: "resource_link", uri: "fixture://notes/linked", name: "linked-notes" });
   });
 
   it("carries the destructive annotation on exactly one tool", () => {
