@@ -82,14 +82,34 @@ function message(e: ErrorObject): string {
   }
 }
 
-/** Errors from inside a oneOf/anyOf branch describe a branch the user did not pick; the combinator's own error says it. */
-const inBranch = (e: ErrorObject): boolean => /\/(oneOf|anyOf)\/\d+(\/|$)/.test(e.schemaPath);
+const BRANCH = /\/(oneOf|anyOf)\/\d+(\/|$)/;
+const COMBINATOR = /\/(oneOf|anyOf)$/;
+
+/**
+ * Errors from inside a oneOf/anyOf branch describe a branch the user did not pick; the combinator's
+ * own error says it. The exception is a field collapsed to "X or null": the form shows X with its
+ * constraints, so X's branch error is the useful message and the bare combinator error is the noise.
+ * `nullablePaths` holds the instance paths of such combinators that failed.
+ */
+function inBranch(e: ErrorObject, nullablePaths: string[]): boolean {
+  if (!BRANCH.test(e.schemaPath)) return false;
+  const under = nullablePaths.some((p) => e.instancePath === p || e.instancePath.startsWith(`${p}/`));
+  if (!under) return true;
+  const p = e.params as Record<string, unknown>;
+  return e.keyword === "type" && p["type"] === "null";
+}
 
 function toFieldErrors(errors: ErrorObject[], model: FormModel | undefined): FieldError[] {
+  const nullablePaths = model
+    ? errors
+        .filter((e) => COMBINATOR.test(e.schemaPath) && fieldAtPath(model, e.instancePath)?.field.nullable === true)
+        .map((e) => e.instancePath)
+    : [];
+  const isNullableParent = (e: ErrorObject): boolean => COMBINATOR.test(e.schemaPath) && nullablePaths.includes(e.instancePath);
   const out: FieldError[] = [];
   const seen = new Set<string>();
   for (const e of errors) {
-    if (inBranch(e)) continue;
+    if (inBranch(e, nullablePaths) || isNullableParent(e)) continue;
     const instancePath = errorPath(e);
     const owner = model ? fieldAtPath(model, instancePath) : undefined;
     const path = owner ? owner.path : instancePath;

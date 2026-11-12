@@ -183,3 +183,18 @@ describe("a schema that cannot be compiled never blocks a call", () => {
     expect(first.valid).toBe(false);
   });
 });
+
+describe("a collapsed nullable field keeps its own constraint message", () => {
+  const schema = { type: "object", properties: { nick: { anyOf: [{ type: "string", minLength: 5 }, { type: "null" }] } } };
+
+  it("reports minLength on the field, not the bare anyOf", () => {
+    const r = validateForm(toFormModel(schema), schema, { nick: "ab" });
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0]).toMatchObject({ path: "/nick", keyword: "minLength" });
+    expect(r.errors.some((e) => e.keyword === "anyOf")).toBe(false);
+  });
+
+  it("accepts a valid value", () => {
+    expect(validateForm(toFormModel(schema), schema, { nick: "abcdef" }).valid).toBe(true);
+  });
+});
