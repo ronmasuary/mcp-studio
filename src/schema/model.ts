@@ -112,6 +112,8 @@ export interface FormModel {
  */
 export interface FieldError {
   path: string;
+  /** Ajv's exact `instancePath`, only set when it differs from `path` (an error inside a raw JSON field). */
+  instancePath?: string;
   message: string;
   /** The JSON Schema keyword that failed (`minimum`, `required`, ...), or a toArgs code such as `json`. */
   keyword: string;
