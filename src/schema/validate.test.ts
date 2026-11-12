@@ -168,6 +168,7 @@ describe("a schema that cannot be compiled never blocks a call", () => {
     ["an unresolvable $ref", { type: "object", properties: { a: { $ref: "#/$defs/missing" } } }],
     ["a type that does not exist", { type: "object", properties: { a: { type: "date" } } }],
     ["a non-object schema", null],
+    ["a root $ref to itself, which compiles but overflows the stack when run", { $ref: "#", type: "object", properties: { a: { type: "string" } } }],
   ])("%s", (_l, schema) => {
     const r = validateArgs(schema, { a: 1 });
     expect(r.valid).toBe(true);

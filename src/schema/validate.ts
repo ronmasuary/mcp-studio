@@ -141,7 +141,12 @@ export function validateArgs(schema: unknown, args: unknown, model?: FormModel):
   if (typeof schema !== "object" || schema === null) return result([], "input schema is not an object");
   const compiled = compile(schema);
   if ("error" in compiled) return result([], compiled.error);
-  compiled.validate(args);
+  try {
+    compiled.validate(args);
+  } catch (err) {
+    // A schema can compile and still blow the stack at run time (a root `$ref: "#"`). Fail open.
+    return result([], err instanceof Error ? err.message : String(err));
+  }
   return result(toFieldErrors(compiled.validate.errors ?? [], model));
 }
 
