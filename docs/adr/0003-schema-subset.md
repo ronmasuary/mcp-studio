@@ -90,7 +90,9 @@ caught separately after 16 hops.
 
 ### From form state to a payload
 
-The plan wrote `toArgs(formState)`; the model is a required second argument because type coercion and the drop-empty-optionals rule both need the field kinds and `required` flags, which form state alone does not carry.
+The plan wrote `toArgs(formState)`; the model is a required second argument because type
+coercion and the drop-empty-optionals rule both need the field kinds and `required` flags,
+which form state alone does not carry.
 
 `toArgs(model, state)` returns `{ args, errors }`.
 
@@ -149,10 +151,14 @@ do the second. The SDK keeps using its own wrapper internally, for example to ch
   are emitted first in numeric order. That is JavaScript object semantics, which this layer cannot
   see through.
 - A required string cannot be sent as `""` from the form. This is the one place the form is less
-  expressive than the schema; the raw JSON editor covers it. Raw mode calls `validateArgs` directly rather than `validateForm`, because the `path: ""` raw branch in `toArgs` only fires when the root schema itself was unsupported.
+  expressive than the schema; the raw JSON editor covers it. Raw mode calls `validateArgs`
+  directly rather than `validateForm`, because the `path: ""` raw branch in `toArgs` only
+  fires when the root schema itself was unsupported.
 - Validation can pass while the server still rejects the call (rules the schema does not state),
   and can fail on a schema the server is lenient about. The server stays the final judge, which is
-  why a `schemaError` does not block and the UI still offers the raw JSON editor. A truthy `schemaError` must render as a non-blocking banner above the form in Phase 5 task 5.9, since failing open is deliberate but nothing else requires the UI to surface it.
+  why a `schemaError` does not block and the UI still offers the raw JSON editor. A truthy
+  `schemaError` must render as a non-blocking banner above the form in Phase 5 task 5.9,
+  since failing open is deliberate but nothing else requires the UI to surface it.
 - Tests drive the real fixture tool list: every one of the 25 tools yields either a model or an
   explicit `unsupported` with a reason and a path that `fieldAtPath` resolves, `hostile_schema` is
   pinned to the three entries above, and a boundary test fails if anything in `src/schema/` imports
