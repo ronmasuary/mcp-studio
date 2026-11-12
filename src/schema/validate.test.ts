@@ -14,6 +14,7 @@ describe("per-field errors from the fixture schemas", () => {
     ["number above maximum", "add", { a: "1", b: "500" }, "/b", "maximum"],
     ["number below minimum", "add", { a: "-101", b: "0" }, "/a", "minimum"],
     ["non-numeric text in a number field", "add", { a: "abc", b: "1" }, "/a", "type"],
+    ["overflowing numeric text is a type error, not a silent null", "add", { a: "1e400", b: "1" }, "/a", "type"],
     ["fractional integer", "add", { a: "1", b: "1", times: "2.5" }, "/times", "type"],
     ["integer below minimum", "add", { a: "1", b: "1", times: "0" }, "/times", "minimum"],
     ["blank required string is reported as required", "greet", { name: "" }, "/name", "required"],

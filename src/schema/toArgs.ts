@@ -65,7 +65,8 @@ function coerce(field: FormField, value: unknown, path: string, pass: Pass, inAr
     case "integer": {
       if (typeof value === "number") return value;
       const text = String(value).trim();
-      return NUMBER_TEXT.test(text) ? Number(text) : value;
+      // Overflow spellings such as "1e400" parse to Infinity, which JSON writes as null: pass them through.
+      return NUMBER_TEXT.test(text) && Number.isFinite(Number(text)) ? Number(text) : value;
     }
     case "boolean": {
       if (typeof value === "boolean") return value;
