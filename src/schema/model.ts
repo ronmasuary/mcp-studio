@@ -104,3 +104,22 @@ export interface FormModel {
   /** Every unsupported field anywhere in the tree, in tree order, so the UI can show one banner. */
   unsupported: UnsupportedField[];
 }
+
+/**
+ * One problem, tied to the input that caused it. `path` is a JSON Pointer to the instance (the
+ * same format as a field's `path`, with real indexes for array rows), so the UI shows the message
+ * under the input whose path matches.
+ */
+export interface FieldError {
+  path: string;
+  message: string;
+  /** The JSON Schema keyword that failed (`minimum`, `required`, ...), or a toArgs code such as `json`. */
+  keyword: string;
+}
+
+/**
+ * What the UI holds while the user types. It mirrors the argument tree by property name, but
+ * leaves are whatever the inputs produce: text for number fields, "" for cleared inputs, arrays
+ * of row states for arrays, and for an `unsupported` field the raw JSON text from its editor.
+ */
+export type FormState = Record<string, unknown>;
